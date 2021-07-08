@@ -1,0 +1,6 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "server=.\\sqlexpress;database=TableMatch;trusted_connection=true"
+  }
+}
+
