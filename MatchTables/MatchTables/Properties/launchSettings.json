@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "MatchTables": {
+      "commandName": "Project",
+      "commandLineArgs": "MatchTables.exe  -s sourcetable1 -t sourcetable2 -f SocialSecurityNumber"
+    }
+  }
+}

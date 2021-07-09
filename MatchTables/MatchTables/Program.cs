@@ -1,6 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using CommandLine;
 using MatchTables.Interfaces;
+using MatchTables.Options;
 using MatchTables.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +14,12 @@ namespace MatchTables
     class Program
     {
         static async Task Main(string[] args)
+        {
+           await Parser.Default.ParseArguments<ParseOptions>(args)
+                .WithParsedAsync(RunOptions);
+        
+        }
+        static async Task RunOptions(ParseOptions opts)
         {
             //Setup DI
             var serviceProvider = new ServiceCollection()
@@ -24,12 +33,9 @@ namespace MatchTables
 
             logger.LogDebug("Starting application");
 
-
-
-            //do the actual work here
+          
             var syncService = serviceProvider.GetService<ISyncService>();
-            await syncService.StartSyncAsync("SourceTable1", "SourceTable2", "");
-            
+            await syncService.StartSyncAsync(opts.table1, opts.table2, opts.primarykey);
 
 
             logger.LogDebug("All done!");
