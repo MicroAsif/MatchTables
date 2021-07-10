@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CommandLine;
+using MatchTables.Helpers;
 using MatchTables.Interfaces;
 using MatchTables.Options;
 using MatchTables.Services;
@@ -26,6 +27,7 @@ namespace MatchTables
                     .AddLogging(loggingBuilder => loggingBuilder.AddConsole().SetMinimumLevel(LogLevel.Debug))
                     .AddSingleton<IDataAccessService, DataAccessService>()
                     .AddSingleton<ISyncService, SyncService>()
+                    .AddSingleton<IDbHelper, DBHelper>()
                     .BuildServiceProvider();
 
             var logger = serviceProvider.GetService<ILoggerFactory>()

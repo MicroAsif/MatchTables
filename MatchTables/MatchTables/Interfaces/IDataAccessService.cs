@@ -9,8 +9,8 @@ namespace MatchTables.Interfaces
 {
     public interface IDataAccessService
     {
-        IEnumerable<string> GetColumnNames(string tableName);
-        List<string> GetPrimaryKeyColumns(string tableName);
+        Task<IEnumerable<string>> GetColumnNames(string tableName);
+        Task<List<string>> GetPrimaryKeyColumns(string tableName);
         Task<List<Customer>> GetTableValues(string tableName);
         Task InsertUpdateDelete(SyncViewModel viewModel);
         Task DeleteDataFromDb(string tableName, List<Customer> data);

@@ -24,7 +24,7 @@ namespace MatchTables.Services
         public async Task StartSyncAsync(string source, string target, string primaryKey)
         {
 
-            var isValid = IsTableColumnsValid(source, target, primaryKey);
+            var isValid = await IsTableColumnsValid(source, target, primaryKey);
             if (isValid)
             {
                 var sourceData = await _dataAccessService.GetTableValues(source);
@@ -71,13 +71,13 @@ namespace MatchTables.Services
             var syncViewModel = new SyncViewModel { Added = added, Modified = modified, Deleted = deleted };
             return syncViewModel;
         }
-        private bool IsTableColumnsValid(string source, string target, string primaryKey)
+        private async Task<bool> IsTableColumnsValid(string source, string target, string primaryKey)
         {
             var result = true;
 
             //two tables primay key check
-            var sourceTablePKeys = _dataAccessService.GetPrimaryKeyColumns(source);
-            var targetTablePKeys = _dataAccessService.GetPrimaryKeyColumns(target);
+            var sourceTablePKeys = await _dataAccessService.GetPrimaryKeyColumns(source);
+            var targetTablePKeys = await _dataAccessService.GetPrimaryKeyColumns(target);
             
             if (!sourceTablePKeys.All(targetTablePKeys.Contains))
             {
@@ -93,10 +93,9 @@ namespace MatchTables.Services
                 throw new Exception("Table primary key is not matched");
             }
 
-
             //two tables columns  check
-            var sourceTableColumns = _dataAccessService.GetColumnNames(source);
-            var targetTableColumns = _dataAccessService.GetColumnNames(target);
+            var sourceTableColumns = await _dataAccessService.GetColumnNames(source);
+            var targetTableColumns = await _dataAccessService.GetColumnNames(target);
 
             if (!sourceTableColumns.All(targetTableColumns.Contains))
             {

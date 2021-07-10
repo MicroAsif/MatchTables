@@ -4,9 +4,11 @@ using System.Data;
 using System.Data.Common;
 using System.Data.SqlClient;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+using MatchTables.Helpers;
 using MatchTables.Interfaces;
 using MatchTables.Models;
 using MatchTables.ViewModel;
@@ -17,34 +19,32 @@ namespace MatchTables.Services
     public class DataAccessService : IDataAccessService
     {
         private readonly ILogger<DataAccessService> _logger;
+        private readonly IDbHelper _dbHelper;
 
-        public DataAccessService(ILogger<DataAccessService> logger)
+        public DataAccessService(ILogger<DataAccessService> logger, IDbHelper dbHelper)
         {
             _logger = logger;
+            _dbHelper = dbHelper;
         }
-        public IEnumerable<string> GetColumnNames(string tableName)
+        public async Task<IEnumerable<string>> GetColumnNames(string tableName)
         {
+            CheckTableName(tableName);
+
             var result = new List<string>();
-            using var sqlCon = GetConnection();
-            var sqlCmd = sqlCon.CreateCommand();
-            sqlCmd.CommandText = "select * from " + tableName + " where 1=0"; // No data wanted, only schema  
-            sqlCmd.CommandType = CommandType.Text;
-            var sqlDr = sqlCmd.ExecuteReader();
-            var dataTable = sqlDr.GetSchemaTable();
-            foreach (DataRow row in dataTable.Rows) result.Add(row.Field<string>("ColumnName"));
+            var query = "select * from " + tableName + " where 1=0"; // No data wanted, only schema  
+            var dataTable = await _dbHelper.ExecuteReaderDatatableAsync(query);
+            foreach (DataRow row in dataTable.Rows) 
+                result.Add(row.Field<string>("ColumnName"));
+
             return result;
         }
-        public List<string> GetPrimaryKeyColumns(string tableName)
+        public async Task<List<string>> GetPrimaryKeyColumns(string tableName)
         {
-            DbConnection connection = GetConnection();
+            CheckTableName(tableName);
+
             List<string> result = new List<string>();
-            
             string[] restrictions = new string[] { null, null, tableName };
-            DataTable table = connection.GetSchema("IndexColumns", restrictions);
-
-            if (string.IsNullOrEmpty(tableName))
-                throw new Exception("Table name must be set.");
-
+            DataTable table = await _dbHelper.ExecuteReaderDatatableAsync(restrictions);
             foreach (DataRow row in table.Rows)
             {
                 result.Add(row["column_name"].ToString());
@@ -55,32 +55,11 @@ namespace MatchTables.Services
         public async Task<List<Customer>> GetTableValues(string tableName)
         {
             var customerData = new List<Customer>();
-
-            await using SqlConnection conn = GetConnection();
             string query = $"SELECT * FROM {tableName}";
-            SqlCommand cmd = new SqlCommand(query, conn);
 
-            SqlDataReader dr = await cmd.ExecuteReaderAsync();
-            if (dr.HasRows)
-            {
-                while (dr.Read())
-                {
-                    var customer = new Customer
-                    {
-                        SocialSecurityNumber = dr.GetString(0),
-                        FirstName = dr.GetString(1),
-                        LastName = dr.GetString(2),
-                        Department = dr.GetString(3)
-                    };
-                    customerData.Add(customer);
-                }
-            }
-            else
-            {
-                Console.WriteLine("No data found.");
-            }
-            await dr.CloseAsync();
-            await conn.CloseAsync();
+            var dt= await _dbHelper.ExecuteReaderAsync(query);
+            customerData = ConvertDataTable<Customer>(dt);
+            
             return customerData;
         }
 
@@ -94,30 +73,21 @@ namespace MatchTables.Services
 
             if (viewModel.Modified.Count > 0)
                 await UpdateDataToDb(viewModel.TargetedTable, viewModel.Modified);
+           
         }
 
         public async Task InsertDataToDb(string tableName, List<Customer> data)
         {
             try
             {
-                await using SqlConnection conn = GetConnection();
-                SqlCommand cmd = new SqlCommand($"INSERT INTO {tableName} (SocialSecurityNumber, FirstName, LastName, Department)" +
-                                                "VALUES (@SocialSecurityNumber, @FirstName, @LastName, @Department)")
-                    { CommandType = CommandType.Text, Connection = conn };
-                cmd.Parameters.Add("@SocialSecurityNumber", SqlDbType.VarChar);
-                cmd.Parameters.Add("@FirstName", SqlDbType.VarChar);
-                cmd.Parameters.Add("@LastName", SqlDbType.VarChar);
-                cmd.Parameters.Add("@Department", SqlDbType.VarChar);
+                var query = $"INSERT INTO {tableName} (SocialSecurityNumber, FirstName, LastName, Department)" +
+                                                 "VALUES (@SocialSecurityNumber, @FirstName, @LastName, @Department)";
 
-                foreach (var item in data)
-                {
-                    cmd.Parameters[0].Value = item.SocialSecurityNumber;
-                    cmd.Parameters[1].Value = item.FirstName;
-                    cmd.Parameters[2].Value = item.LastName;
-                    cmd.Parameters[3].Value = item.Department;
-                    await cmd.ExecuteNonQueryAsync();
-                }
-                conn.Close();
+                var result = await _dbHelper.ExecuteNonQueryWithDataAsync(query, data);
+
+                Console.WriteLine("Added employees");
+                foreach(var d in data)
+                    Console.WriteLine($"{d.SocialSecurityNumber} ({d.FirstName} {d.LastName})");
             }
             catch (Exception e)
             {
@@ -129,22 +99,11 @@ namespace MatchTables.Services
         {
             try
             {
-                await using SqlConnection conn = GetConnection();
-                SqlCommand cmd = new SqlCommand($"Update {tableName} SET FirstName = @FirstName, LastName = @LastName, Department = @Department Where SocialSecurityNumber = @SocialSecurityNumber", conn);
-                cmd.Parameters.Add("@SocialSecurityNumber", SqlDbType.VarChar);
-                cmd.Parameters.Add("@FirstName", SqlDbType.VarChar);
-                cmd.Parameters.Add("@LastName", SqlDbType.VarChar);
-                cmd.Parameters.Add("@Department", SqlDbType.VarChar);
-
-                foreach (var item in data)
-                {
-                    cmd.Parameters[0].Value = item.SocialSecurityNumber;
-                    cmd.Parameters[1].Value = item.FirstName;
-                    cmd.Parameters[2].Value = item.LastName;
-                    cmd.Parameters[3].Value = item.Department;
-                    await cmd.ExecuteNonQueryAsync();
-                }
-                conn.Close();
+                var query = $"Update {tableName} SET FirstName = @FirstName, LastName = @LastName, Department = @Department Where SocialSecurityNumber = @SocialSecurityNumber";
+                var result = await _dbHelper.ExecuteNonQueryWithDataAsync(query, data);
+                Console.WriteLine("Changes");
+                foreach (var d in data)
+                    Console.WriteLine($"{d.SocialSecurityNumber} ({d.FirstName} {d.LastName})");
             }
             catch (Exception e)
             {
@@ -156,11 +115,12 @@ namespace MatchTables.Services
         {
             try
             {
-                await using SqlConnection connection = GetConnection();
-                var query = $"DELETE FROM {tableName} WHERE SocialSecurityNumber IN (" + string.Join(",", data.Select(x=>x.SocialSecurityNumber)) + ")";
-                SqlCommand commandDelete = new SqlCommand(query, connection);
-                await commandDelete.ExecuteNonQueryAsync();
-                await connection.CloseAsync();
+                var query = $"DELETE FROM {tableName} WHERE SocialSecurityNumber IN (" + string.Join(",", data.Select(x => x.SocialSecurityNumber)) + ")";
+                await _dbHelper.ExecuteNonQueryAsync(query);
+
+                Console.WriteLine("Removed employees");
+                foreach (var d in data)
+                    Console.WriteLine($"{d.SocialSecurityNumber} ({d.FirstName} {d.LastName})");
             }
             catch (Exception e)
             {
@@ -171,14 +131,41 @@ namespace MatchTables.Services
 
 
         #region Private methods
-        private SqlConnection GetConnection()
+        
+
+        private void CheckTableName(string table)
         {
-            SqlConnection connection = new SqlConnection(ApplicationConfigs.ConnectionString());
-            if (connection.State != ConnectionState.Open)
-                connection.Open();
-            return connection;
+            if (string.IsNullOrEmpty(table))
+                throw new Exception("Table name must be set.");
         }
 
+        private static List<T> ConvertDataTable<T>(DataTable dt)
+        {
+            List<T> data = new List<T>();
+            foreach (DataRow row in dt.Rows)
+            {
+                T item = GetItem<T>(row);
+                data.Add(item);
+            }
+            return data;
+        }
+        private static T GetItem<T>(DataRow dr)
+        {
+            Type temp = typeof(T);
+            T obj = Activator.CreateInstance<T>();
+
+            foreach (DataColumn column in dr.Table.Columns)
+            {
+                foreach (PropertyInfo pro in temp.GetProperties())
+                {
+                    if (pro.Name == column.ColumnName)
+                        pro.SetValue(obj, dr[column.ColumnName], null);
+                    else
+                        continue;
+                }
+            }
+            return obj;
+        }
 
         #endregion
     }
