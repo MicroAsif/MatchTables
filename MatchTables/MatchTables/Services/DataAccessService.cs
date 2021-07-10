@@ -86,8 +86,8 @@ namespace MatchTables.Services
                 var result = await _dbHelper.ExecuteNonQueryWithDataAsync(query, data);
 
                 Console.WriteLine("Added employees");
-                foreach(var d in data)
-                    Console.WriteLine($"{d.SocialSecurityNumber} ({d.FirstName} {d.LastName})");
+                PrintDetails(data);
+
             }
             catch (Exception e)
             {
@@ -102,8 +102,8 @@ namespace MatchTables.Services
                 var query = $"Update {tableName} SET FirstName = @FirstName, LastName = @LastName, Department = @Department Where SocialSecurityNumber = @SocialSecurityNumber";
                 var result = await _dbHelper.ExecuteNonQueryWithDataAsync(query, data);
                 Console.WriteLine("Changes");
-                foreach (var d in data)
-                    Console.WriteLine($"{d.SocialSecurityNumber} ({d.FirstName} {d.LastName})");
+                PrintDetails(data);
+
             }
             catch (Exception e)
             {
@@ -119,8 +119,7 @@ namespace MatchTables.Services
                 await _dbHelper.ExecuteNonQueryAsync(query);
 
                 Console.WriteLine("Removed employees");
-                foreach (var d in data)
-                    Console.WriteLine($"{d.SocialSecurityNumber} ({d.FirstName} {d.LastName})");
+                PrintDetails(data);
             }
             catch (Exception e)
             {
@@ -132,6 +131,11 @@ namespace MatchTables.Services
 
         #region Private methods
         
+        private void PrintDetails(List<Customer> data)
+        {
+            foreach (var d in data)
+                Console.WriteLine($"{d.SocialSecurityNumber} ({d.FirstName} {d.LastName})");
+        }
 
         private void CheckTableName(string table)
         {
