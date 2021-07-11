@@ -9,6 +9,7 @@ namespace MatchTables.ViewModel
     {
         public List<Customer> Added { get; set; }
         public List<Customer> Modified { get; set; }
+        public List<Customer> Exising { get; set; }
         public List<Customer> Deleted { get; set; }
         public string TargetedTable { get; set; }
     }

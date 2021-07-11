@@ -72,7 +72,7 @@ namespace MatchTables.Services
                 await DeleteDataFromDb(viewModel.TargetedTable, viewModel.Deleted);
 
             if (viewModel.Modified.Count > 0)
-                await UpdateDataToDb(viewModel.TargetedTable, viewModel.Modified);
+                await UpdateDataToDb(viewModel.TargetedTable, viewModel.Modified, viewModel.Exising);
            
         }
 
@@ -95,15 +95,14 @@ namespace MatchTables.Services
                 throw;
             }
         }
-        public async Task UpdateDataToDb(string tableName, List<Customer> data)
+        public async Task UpdateDataToDb(string tableName, List<Customer> data, List<Customer> exising)
         {
             try
             {
                 var query = $"Update {tableName} SET FirstName = @FirstName, LastName = @LastName, Department = @Department Where SocialSecurityNumber = @SocialSecurityNumber";
                 var result = await _dbHelper.ExecuteNonQueryWithDataAsync(query, data);
                 Console.WriteLine("Changes");
-                PrintDetails(data);
-
+                PrintDetails(data, exising);
             }
             catch (Exception e)
             {
@@ -135,6 +134,26 @@ namespace MatchTables.Services
         {
             foreach (var d in data)
                 Console.WriteLine($"{d.SocialSecurityNumber} ({d.FirstName} {d.LastName})");
+        }
+        private void PrintDetails(List<Customer> data, List<Customer> existing)
+        {
+            if (data.Count == existing.Count)
+            {
+                for (int i = 0; i < data.Count; i++) 
+                {
+                    if (data[i].FirstName != existing[i].FirstName) 
+                        Console.WriteLine($"{data[i].SocialSecurityNumber}  Firstname has changed from {existing[i].FirstName} to  {data[i].FirstName}");
+                    
+                    if (data[i].LastName != existing[i].LastName)
+                        Console.WriteLine($"{data[i].SocialSecurityNumber}  Lastname has changed from {existing[i].LastName} to  {data[i].LastName}");
+
+                    if (data[i].Department != existing[i].Department)
+                        Console.WriteLine($"{data[i].SocialSecurityNumber}  Department has changed from {existing[i].Department} to  {data[i].Department}");
+
+
+                }    
+            }
+     
         }
 
         private void CheckTableName(string table)

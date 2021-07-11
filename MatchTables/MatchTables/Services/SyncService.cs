@@ -52,6 +52,7 @@ namespace MatchTables.Services
 
             var added = new List<Customer>();
             var modified = new List<Customer>();
+            var existing = new List<Customer>();
 
             foreach (var row in sourceData)
             {
@@ -63,12 +64,12 @@ namespace MatchTables.Services
                     if (!otherRow.AreEqual(row))
                     {
                         modified.Add(row);
-                        //modified.Add(otherRow);
+                        existing.Add(otherRow);
                     }
                 }
             }
             var deleted = targetData.Where(t => !originalIds.ContainsKey(t.SocialSecurityNumber)).ToList();
-            var syncViewModel = new SyncViewModel { Added = added, Modified = modified, Deleted = deleted };
+            var syncViewModel = new SyncViewModel { Added = added, Modified = modified, Deleted = deleted, Exising = existing };
             return syncViewModel;
         }
         private async Task<bool> IsTableColumnsValid(string source, string target, string primaryKey)
