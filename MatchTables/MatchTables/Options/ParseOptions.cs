@@ -13,7 +13,7 @@ namespace MatchTables.Options
         [Option('t', "table2", Required = true, HelpText = "Input target table name to be processed.")]
         public string table2 { get; set; }
 
-        [Option('f', "primarykey", Required = true, HelpText = "Input primarykey name to be processed.")]
+        [Option('p', "primarykey", Required = true, HelpText = "Input primarykey name to be processed.")]
         public string primarykey { get; set; }
     }
 }
