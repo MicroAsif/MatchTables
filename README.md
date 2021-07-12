@@ -1,6 +1,6 @@
 # MatchTables
 A simple application which will sync the source and destination data, That means source and destnation data will be always same. 
-this application will work as long as as the data source data table schema, destination table schema are same. 
+this application will work as long as the source data table schema, destination table schema are same. 
 
 # let's take a look of the scenario
 <img src="https://github.com/MicroAsif/MatchTables/blob/main/Images/visualization.png" width="70%" height="70%">
