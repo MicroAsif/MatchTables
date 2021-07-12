@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MatchTables.Interfaces;
-using MatchTables.Models;
 using MatchTables.ViewModel;
 using Microsoft.Extensions.Logging;
 
@@ -30,7 +29,7 @@ namespace MatchTables.Services
                 var sourceData = await _dataAccessService.GetTableValues(source);
                 var targetData = await _dataAccessService.GetTableValues(target);
 
-                var syncViewModel = CompareResult(sourceData, targetData);
+                var syncViewModel = CompareResult(sourceData, targetData, primaryKey);
                 syncViewModel.TargetedTable = target;
 
                 await _dataAccessService.InsertUpdateDelete(syncViewModel);
@@ -45,30 +44,42 @@ namespace MatchTables.Services
 
 
         #region private methods
-        private SyncViewModel CompareResult(List<Customer> sourceData, List<Customer> targetData)
+        private SyncViewModel CompareResult(List<Dictionary<string, object>> sourceData, List<Dictionary<string, object>> targetData, string primaryKey)
         {
-            var originalIds = sourceData.ToArray().ToDictionary(o => o.SocialSecurityNumber, o => o);
-            var newIds = targetData.ToArray().ToDictionary(o => o.SocialSecurityNumber, o => o);
+            var originalIds = sourceData;
+            var newIds = targetData;
 
-            var added = new List<Customer>();
-            var modified = new List<Customer>();
-            var existing = new List<Customer>();
+            var added = new List<Dictionary<string, object>>();
+            var modified = new List<Dictionary<string, object>>();
+            var existing = new List<Dictionary<string, object>>();
+            var deleted = new List<Dictionary<string, object>>();
+
 
             foreach (var row in sourceData)
             {
-                if (!newIds.ContainsKey(row.SocialSecurityNumber))
-                    added.Add(row);
+                string key = (string)row[primaryKey];
+
+                var otherRow = newIds.FirstOrDefault(d => (string)d[primaryKey] == key);
+                if (otherRow == null)
+                    added.Add(row); 
                 else
                 {
-                    var otherRow = newIds[row.SocialSecurityNumber];
-                    if (!otherRow.AreEqual(row))
-                    {
-                        modified.Add(row);
-                        existing.Add(otherRow);
-                    }
+                    modified.Add(row);
+                    var modifiled = row.Where(entry => otherRow[entry.Key] != entry.Value).ToDictionary(entry => entry.Key, entry => entry.Value);
+                    
+                    existing.Add(modifiled);
+                    
                 }
             }
-            var deleted = targetData.Where(t => !originalIds.ContainsKey(t.SocialSecurityNumber)).ToList();
+           
+            foreach(var row in targetData)
+            {
+                string key = (string)row[primaryKey];
+
+                var otherRow = originalIds.FirstOrDefault(d => (string)d[primaryKey] == key);
+                if (otherRow == null)
+                    deleted.Add(row);
+            }
             var syncViewModel = new SyncViewModel { Added = added, Modified = modified, Deleted = deleted, Exising = existing };
             return syncViewModel;
         }
@@ -97,6 +108,8 @@ namespace MatchTables.Services
             //two tables columns  check
             var sourceTableColumns = await _dataAccessService.GetColumnNames(source);
             var targetTableColumns = await _dataAccessService.GetColumnNames(target);
+
+
 
             if (!sourceTableColumns.All(targetTableColumns.Contains))
             {

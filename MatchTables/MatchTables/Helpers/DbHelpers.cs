@@ -1,5 +1,4 @@
-﻿using MatchTables.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -69,24 +68,18 @@ namespace MatchTables.Helpers
                 throw;
             }
         }
-        public async Task<int> ExecuteNonQueryWithDataAsync(string query, List<Customer> data)
+        public async Task<int> ExecuteNonQueryWithDataAsync(string query, Dictionary<string, object> data)
         {
             try
             {
                 await using SqlConnection conn = await GetConnection();
                 SqlCommand cmd = new SqlCommand(query)
                 { CommandType = CommandType.Text, Connection = conn };
-                cmd.Parameters.Add("@SocialSecurityNumber", SqlDbType.VarChar);
-                cmd.Parameters.Add("@FirstName", SqlDbType.VarChar);
-                cmd.Parameters.Add("@LastName", SqlDbType.VarChar);
-                cmd.Parameters.Add("@Department", SqlDbType.VarChar);
 
                 foreach (var item in data)
                 {
-                    cmd.Parameters[0].Value = item.SocialSecurityNumber;
-                    cmd.Parameters[1].Value = item.FirstName;
-                    cmd.Parameters[2].Value = item.LastName;
-                    cmd.Parameters[3].Value = item.Department;
+                    cmd.Parameters.AddWithValue($"@{item.Key}", item.Value);
+
                 }
                 return await cmd.ExecuteNonQueryAsync();
                 
