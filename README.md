@@ -47,7 +47,7 @@ GO
  -t, --table2        Required. Input target table name to be processed.
  -p, --primarykey    Required. Input primarykey name to be processed.
  
-  MatchTables.exe -s sourcetable1 -t sourcetaable2 -p SocialSecurityNumber
+ MatchTables.exe -s SourceTable1 -t SourceTable2 -p SocialSecurityNumber
   
  ```
 
