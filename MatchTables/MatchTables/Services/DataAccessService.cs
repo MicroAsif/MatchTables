@@ -4,13 +4,13 @@ using System.Data;
 using System.Data.Common;
 using System.Data.SqlClient;
 using System.Linq;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using MatchTables.Helpers;
 using MatchTables.Interfaces;
-using MatchTables.Models;
 using MatchTables.ViewModel;
 using Microsoft.Extensions.Logging;
 
@@ -52,17 +52,16 @@ namespace MatchTables.Services
 
             return result;
         }
-        public async Task<List<Customer>> GetTableValues(string tableName)
+        public async Task<List<Dictionary<string, object>>> GetTableValues(string tableName)
         {
-            var customerData = new List<Customer>();
+            var customerData = new List<Dictionary<string, object>>();
             string query = $"SELECT * FROM {tableName}";
 
             var dt= await _dbHelper.ExecuteReaderAsync(query);
-            customerData = ConvertDataTable<Customer>(dt);
+            customerData = ConvertDataTable(dt);
             
             return customerData;
         }
-
         public async Task InsertUpdateDelete(SyncViewModel viewModel)
         {
             if (viewModel.Added.Count > 0)
@@ -72,22 +71,24 @@ namespace MatchTables.Services
                 await DeleteDataFromDb(viewModel.TargetedTable, viewModel.Deleted);
 
             if (viewModel.Modified.Count > 0)
-                await UpdateDataToDb(viewModel.TargetedTable, viewModel.Modified, viewModel.Exising);
+                await UpdateDataToDb(viewModel.TargetedTable, viewModel.Modified, viewModel.Existing);
            
         }
-
-        public async Task InsertDataToDb(string tableName, List<Customer> data)
+        public async Task InsertDataToDb(string tableName, List<Dictionary<string, object>> data)
         {
             try
             {
-                var query = $"INSERT INTO {tableName} (SocialSecurityNumber, FirstName, LastName, Department)" +
-                                                 "VALUES (@SocialSecurityNumber, @FirstName, @LastName, @Department)";
+                foreach (var d in data)
+                {
+                    var column = string.Join(",", d.Select(x => x.Key));
+                    var columnValues = string.Join(",", d.Select(x => $"@{x.Key}"));
 
-                var result = await _dbHelper.ExecuteNonQueryWithDataAsync(query, data);
+                    var query = $"INSERT INTO {tableName} ({column}) VALUES ({columnValues})";
+                    var result = await _dbHelper.ExecuteNonQueryWithDataAsync(query, d);
+                }
 
                 Console.WriteLine("Added employees");
                 PrintDetails(data);
-
             }
             catch (Exception e)
             {
@@ -95,12 +96,20 @@ namespace MatchTables.Services
                 throw;
             }
         }
-        public async Task UpdateDataToDb(string tableName, List<Customer> data, List<Customer> exising)
+        public async Task UpdateDataToDb(string tableName, List<Dictionary<string, object>> data, List<Dictionary<string, object>> exising)
         {
             try
             {
-                var query = $"Update {tableName} SET FirstName = @FirstName, LastName = @LastName, Department = @Department Where SocialSecurityNumber = @SocialSecurityNumber";
-                var result = await _dbHelper.ExecuteNonQueryWithDataAsync(query, data);
+
+                foreach (var d in data)
+                {
+                    var key = d.FirstOrDefault().Key;
+                    var keyValue = d.FirstOrDefault().Value;
+
+                    var column = string.Join(",", d.Select(x => x.Key + "=" + $"@{x.Key}"));
+                    var query = $"Update {tableName} SET {column} Where {key} = {keyValue}";
+                    var result = await _dbHelper.ExecuteNonQueryWithDataAsync(query, d);
+                }
                 Console.WriteLine("Changes");
                 PrintDetails(data, exising);
             }
@@ -110,11 +119,20 @@ namespace MatchTables.Services
                 throw;
             }
         }
-        public async Task DeleteDataFromDb(string tableName, List<Customer> data)
+        public async Task DeleteDataFromDb(string tableName, List<Dictionary<string, object>> data)
         {
             try
             {
-                var query = $"DELETE FROM {tableName} WHERE SocialSecurityNumber IN (" + string.Join(",", data.Select(x => x.SocialSecurityNumber)) + ")";
+
+                string columnName = "";
+                List<string> primaryKeys = new List<string>();
+                foreach (var d in data)
+                {
+                    columnName = d.FirstOrDefault().Key;
+                    primaryKeys.Add((string)d.FirstOrDefault().Value);
+                }
+
+                var query = $"DELETE FROM {tableName} WHERE {columnName} IN (" + string.Join(",", primaryKeys.Select(x => x)) + ")";
                 await _dbHelper.ExecuteNonQueryAsync(query);
 
                 Console.WriteLine("Removed employees");
@@ -129,31 +147,51 @@ namespace MatchTables.Services
 
 
         #region Private methods
-        
-        private void PrintDetails(List<Customer> data)
+
+        private void PrintDetails(List<Dictionary<string, object>> data)
         {
             foreach (var d in data)
-                Console.WriteLine($"{d.SocialSecurityNumber} ({d.FirstName} {d.LastName})");
+            {
+                var keys = d.Select(x => x.Key).Take(3).ToList();
+                string values = "";
+                foreach (var k in keys)
+                {
+                    values += $"{d[k]} ";
+                }
+                Console.WriteLine(values);
+            }
+
         }
-        private void PrintDetails(List<Customer> data, List<Customer> existing)
+        private void PrintDetails(List<Dictionary<string, object>> data, List<Dictionary<string, object>> existing)
         {
             if (data.Count == existing.Count)
             {
-                for (int i = 0; i < data.Count; i++) 
+                var keys = data.Select(x=>x.Keys).SelectMany(c => c).Distinct().ToList();
+
+                List<string> results = new List<string>();
+
+                foreach (Dictionary<string, object> d in existing)
                 {
-                    if (data[i].FirstName != existing[i].FirstName) 
-                        Console.WriteLine($"{data[i].SocialSecurityNumber}  Firstname has changed from {existing[i].FirstName} to  {data[i].FirstName}");
-                    
-                    if (data[i].LastName != existing[i].LastName)
-                        Console.WriteLine($"{data[i].SocialSecurityNumber}  Lastname has changed from {existing[i].LastName} to  {data[i].LastName}");
+                    string result = "";
+                    string keyValue = (string)d[keys.First()];
+                    result += $"{keyValue} ";
+                    var dataRow = data.FirstOrDefault(x => x[keys.First()].ToString() == keyValue);
+                    foreach (var o in d)
+                    {
+                        if (o.Value.ToString() != dataRow[o.Key].ToString())
+                        {
+                            result += $" {o.Key} has changed from {o.Value} to {dataRow[o.Key]}";
+                            
+                        }
+                    }
+                    results.Add(result);
+                }
 
-                    if (data[i].Department != existing[i].Department)
-                        Console.WriteLine($"{data[i].SocialSecurityNumber}  Department has changed from {existing[i].Department} to  {data[i].Department}");
-
-
-                }    
+                foreach (var result in results)
+                {
+                    Console.WriteLine(result);
+                }
             }
-     
         }
 
         private void CheckTableName(string table)
@@ -162,32 +200,25 @@ namespace MatchTables.Services
                 throw new Exception("Table name must be set.");
         }
 
-        private static List<T> ConvertDataTable<T>(DataTable dt)
+        private List<Dictionary<string, object>> ConvertDataTable(DataTable dt)
         {
-            List<T> data = new List<T>();
-            foreach (DataRow row in dt.Rows)
+            var rows = new List<Dictionary<string, object>>();
+            foreach (DataRow dataRow in dt.Rows)
             {
-                T item = GetItem<T>(row);
-                data.Add(item);
+                var row = GetItem(dataRow);
+                rows.Add(row);
             }
-            return data;
+            return rows;
         }
-        private static T GetItem<T>(DataRow dr)
-        {
-            Type temp = typeof(T);
-            T obj = Activator.CreateInstance<T>();
 
+        private  Dictionary<string, object> GetItem(DataRow dr)
+        {
+            var row = new Dictionary<string, object>();
             foreach (DataColumn column in dr.Table.Columns)
             {
-                foreach (PropertyInfo pro in temp.GetProperties())
-                {
-                    if (pro.Name == column.ColumnName)
-                        pro.SetValue(obj, dr[column.ColumnName], null);
-                    else
-                        continue;
-                }
+                row.Add(column.ColumnName, dr[column.ColumnName]);
             }
-            return obj;
+            return row;
         }
 
         #endregion

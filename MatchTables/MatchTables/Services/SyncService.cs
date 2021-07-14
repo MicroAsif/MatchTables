@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using MatchTables.Interfaces;
-using MatchTables.Models;
 using MatchTables.ViewModel;
 using Microsoft.Extensions.Logging;
 
@@ -23,14 +21,13 @@ namespace MatchTables.Services
 
         public async Task StartSyncAsync(string source, string target, string primaryKey)
         {
-
             var isValid = await IsTableColumnsValid(source, target, primaryKey);
             if (isValid)
             {
                 var sourceData = await _dataAccessService.GetTableValues(source);
                 var targetData = await _dataAccessService.GetTableValues(target);
 
-                var syncViewModel = CompareResult(sourceData, targetData);
+                var syncViewModel = CompareResult(sourceData, targetData, primaryKey);
                 syncViewModel.TargetedTable = target;
 
                 await _dataAccessService.InsertUpdateDelete(syncViewModel);
@@ -43,35 +40,66 @@ namespace MatchTables.Services
         }
 
 
-
         #region private methods
-        private SyncViewModel CompareResult(List<Customer> sourceData, List<Customer> targetData)
-        {
-            var originalIds = sourceData.ToArray().ToDictionary(o => o.SocialSecurityNumber, o => o);
-            var newIds = targetData.ToArray().ToDictionary(o => o.SocialSecurityNumber, o => o);
 
-            var added = new List<Customer>();
-            var modified = new List<Customer>();
-            var existing = new List<Customer>();
+        private SyncViewModel CompareResult(List<Dictionary<string, object>> sourceData,
+            List<Dictionary<string, object>> targetData, string primaryKey)
+        {
+            var originalIds = sourceData.Select(x => x[primaryKey].ToString()).ToList();
+            var newIds = targetData.Select(x => x[primaryKey].ToString()).ToList();
+
+            var added = new List<Dictionary<string, object>>();
+            var modified = new List<Dictionary<string, object>>();
+            var existing = new List<Dictionary<string, object>>();
+            var deleted = new List<Dictionary<string, object>>();
+
 
             foreach (var row in sourceData)
             {
-                if (!newIds.ContainsKey(row.SocialSecurityNumber))
+                var key = (string) row[primaryKey];
+                if (!newIds.Contains(key))
+                {
                     added.Add(row);
+                }
                 else
                 {
-                    var otherRow = newIds[row.SocialSecurityNumber];
-                    if (!otherRow.AreEqual(row))
+                    var existingRow = targetData.FirstOrDefault(x => x[primaryKey].ToString() == key);
+                    if (!AreDictionariesEqual(row, existingRow))
                     {
                         modified.Add(row);
-                        existing.Add(otherRow);
+                        existing.Add(existingRow);
                     }
                 }
             }
-            var deleted = targetData.Where(t => !originalIds.ContainsKey(t.SocialSecurityNumber)).ToList();
-            var syncViewModel = new SyncViewModel { Added = added, Modified = modified, Deleted = deleted, Exising = existing };
+
+            foreach (var row in targetData)
+            {
+                var key = (string) row[primaryKey];
+                if (!originalIds.Contains(key))
+                    deleted.Add(row);
+            }
+
+            var syncViewModel = new SyncViewModel
+                {Added = added, Modified = modified, Deleted = deleted, Existing = existing};
             return syncViewModel;
         }
+
+        private bool AreDictionariesEqual(Dictionary<string, object> dict1, Dictionary<string, object> dict2)
+        {
+            var dictonary1 = "";
+            var dictonary2 = "";
+
+            foreach (var d in dict1)
+            {
+                dictonary1 += d.Value.ToString();
+                dictonary2 += dict2[d.Key].ToString();
+            }
+
+            if (dictonary1.Equals(dictonary2))
+                return true;
+            return false;
+        }
+
         private async Task<bool> IsTableColumnsValid(string source, string target, string primaryKey)
         {
             var result = true;
@@ -79,7 +107,7 @@ namespace MatchTables.Services
             //two tables primay key check
             var sourceTablePKeys = await _dataAccessService.GetPrimaryKeyColumns(source);
             var targetTablePKeys = await _dataAccessService.GetPrimaryKeyColumns(target);
-            
+
             if (!sourceTablePKeys.All(targetTablePKeys.Contains))
             {
                 result = false;
@@ -98,6 +126,7 @@ namespace MatchTables.Services
             var sourceTableColumns = await _dataAccessService.GetColumnNames(source);
             var targetTableColumns = await _dataAccessService.GetColumnNames(target);
 
+
             if (!sourceTableColumns.All(targetTableColumns.Contains))
             {
                 result = false;
@@ -107,7 +136,7 @@ namespace MatchTables.Services
 
             return result;
         }
-        #endregion
 
+        #endregion
     }
 }
