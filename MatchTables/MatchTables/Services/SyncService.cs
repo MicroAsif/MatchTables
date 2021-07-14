@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using MatchTables.Interfaces;
 using MatchTables.ViewModel;
@@ -22,7 +21,6 @@ namespace MatchTables.Services
 
         public async Task StartSyncAsync(string source, string target, string primaryKey)
         {
-
             var isValid = await IsTableColumnsValid(source, target, primaryKey);
             if (isValid)
             {
@@ -42,12 +40,13 @@ namespace MatchTables.Services
         }
 
 
-
         #region private methods
-        private SyncViewModel CompareResult(List<Dictionary<string, object>> sourceData, List<Dictionary<string, object>> targetData, string primaryKey)
+
+        private SyncViewModel CompareResult(List<Dictionary<string, object>> sourceData,
+            List<Dictionary<string, object>> targetData, string primaryKey)
         {
-            var originalIds = sourceData;
-            var newIds = targetData;
+            var originalIds = sourceData.Select(x => x[primaryKey].ToString()).ToList();
+            var newIds = targetData.Select(x => x[primaryKey].ToString()).ToList();
 
             var added = new List<Dictionary<string, object>>();
             var modified = new List<Dictionary<string, object>>();
@@ -57,32 +56,50 @@ namespace MatchTables.Services
 
             foreach (var row in sourceData)
             {
-                string key = (string)row[primaryKey];
-
-                var otherRow = newIds.FirstOrDefault(d => (string)d[primaryKey] == key);
-                if (otherRow == null)
-                    added.Add(row); 
+                var key = (string) row[primaryKey];
+                if (!newIds.Contains(key))
+                {
+                    added.Add(row);
+                }
                 else
                 {
-                    modified.Add(row);
-                    var modifiled = row.Where(entry => otherRow[entry.Key] != entry.Value).ToDictionary(entry => entry.Key, entry => entry.Value);
-                    
-                    existing.Add(modifiled);
-                    
+                    var existingRow = targetData.FirstOrDefault(x => x[primaryKey].ToString() == key);
+                    if (!AreDictionariesEqual(row, existingRow))
+                    {
+                        modified.Add(row);
+                        existing.Add(existingRow);
+                    }
                 }
             }
-           
-            foreach(var row in targetData)
-            {
-                string key = (string)row[primaryKey];
 
-                var otherRow = originalIds.FirstOrDefault(d => (string)d[primaryKey] == key);
-                if (otherRow == null)
+            foreach (var row in targetData)
+            {
+                var key = (string) row[primaryKey];
+                if (!originalIds.Contains(key))
                     deleted.Add(row);
             }
-            var syncViewModel = new SyncViewModel { Added = added, Modified = modified, Deleted = deleted, Exising = existing };
+
+            var syncViewModel = new SyncViewModel
+                {Added = added, Modified = modified, Deleted = deleted, Existing = existing};
             return syncViewModel;
         }
+
+        private bool AreDictionariesEqual(Dictionary<string, object> dict1, Dictionary<string, object> dict2)
+        {
+            var dictonary1 = "";
+            var dictonary2 = "";
+
+            foreach (var d in dict1)
+            {
+                dictonary1 += d.Value.ToString();
+                dictonary2 += dict2[d.Key].ToString();
+            }
+
+            if (dictonary1.Equals(dictonary2))
+                return true;
+            return false;
+        }
+
         private async Task<bool> IsTableColumnsValid(string source, string target, string primaryKey)
         {
             var result = true;
@@ -90,7 +107,7 @@ namespace MatchTables.Services
             //two tables primay key check
             var sourceTablePKeys = await _dataAccessService.GetPrimaryKeyColumns(source);
             var targetTablePKeys = await _dataAccessService.GetPrimaryKeyColumns(target);
-            
+
             if (!sourceTablePKeys.All(targetTablePKeys.Contains))
             {
                 result = false;
@@ -110,7 +127,6 @@ namespace MatchTables.Services
             var targetTableColumns = await _dataAccessService.GetColumnNames(target);
 
 
-
             if (!sourceTableColumns.All(targetTableColumns.Contains))
             {
                 result = false;
@@ -120,7 +136,7 @@ namespace MatchTables.Services
 
             return result;
         }
-        #endregion
 
+        #endregion
     }
 }
