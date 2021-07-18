@@ -12,7 +12,7 @@ this application will work as long as the source data table schema, destination 
     "DefaultConnection": "server=.\\YOUR_SERVER_NAME;database=YOUR_DB_NAME;trusted_connection=true"
   }
  ```
- 2. Create table as many as you want but same sure table schemas are same
+ 2. Create table as many as you want but make sure table schemas are same
  ```
 CREATE TABLE [dbo].[SourceTable1](
 	[SocialSecurityNumber] [nvarchar](50) NOT NULL,
